@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rowton-radar-frontend
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    restart: unless-stopped

@@ -33,6 +33,7 @@ body {
   background: var(--r-void);
   color: var(--r-text);
   font-family: var(--font-sora, "Sora", system-ui, sans-serif);
+  overflow-x: hidden;
 }
 
 * {
@@ -41,11 +42,23 @@ body {
 
 .app-shell {
   height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .map-host {
   position: relative;
   height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.map-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 .map-canvas {
@@ -54,6 +67,99 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
+}
+
+/* Semi-transparent crosshairs at viewport center (map center = data origin). */
+.map-crosshair {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 520;
+}
+.map-crosshair::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(240, 228, 210, 0.28);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+}
+.map-crosshair::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: rgba(240, 228, 210, 0.28);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+}
+
+/* Leaflet applies mix-blend-mode: plus-lighter to all tile images; upscaled radar (maxNativeZoom)
+   can blend to near-invisible over the basemap. Force normal blend on the radar layer only. */
+.leaflet-container .leaflet-layer.rowton-radar-tiles img.leaflet-tile {
+  mix-blend-mode: normal !important;
+}
+.leaflet-container .leaflet-layer.rowton-radar-tiles {
+  isolation: isolate;
+}
+
+.map-view-origin-badge {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: max(10px, env(safe-area-inset-left, 0px));
+  z-index: 1004;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 8px 10px 9px;
+  border-radius: var(--r-radius);
+  border: 1px solid var(--r-edge);
+  background: linear-gradient(165deg, rgba(22, 16, 18, 0.92), rgba(8, 6, 6, 0.94));
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-sora, "Sora", system-ui, sans-serif);
+  pointer-events: none;
+}
+.map-view-origin-badge__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(196, 160, 74, 0.85);
+  margin-bottom: 4px;
+}
+.map-view-origin-badge__line {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--r-silver-bright);
+  line-height: 1.25;
+}
+.map-view-origin-badge__county {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.map-view-origin-badge__county--muted {
+  color: var(--r-mute);
+  font-size: 11px;
+}
+.map-view-origin-badge__county-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(196, 160, 74, 0.95);
+}
+.map-view-origin-badge__county-name {
+  font-weight: 600;
+  color: #e4dfd8;
 }
 
 /* Carto label-only: lift labels so they read on light basemap + radar */
@@ -647,6 +753,14 @@ body {
   gap: 3px;
 }
 @media (max-width: 900px) {
+  .rowton-floating-stack {
+    max-height: min(46vh, 420px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
   .rowton-legend {
     border-left: none;
     border-top: 1px solid var(--r-edge);
@@ -1283,7 +1397,7 @@ li.is-selected .view-alerts-item {
   position: fixed;
   right: 12px;
   bottom: max(64px, calc(56px + 12px + env(safe-area-inset-bottom, 0px)));
-  z-index: 1001;
+  z-index: 1007;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1309,10 +1423,10 @@ li.is-selected .view-alerts-item {
   position: fixed;
   right: 12px;
   bottom: max(120px, calc(56px + 72px + env(safe-area-inset-bottom, 0px)));
-  z-index: 1002;
-  min-width: 240px;
-  max-width: min(360px, 94vw);
-  max-height: min(70vh, 520px);
+  z-index: 1008;
+  min-width: 260px;
+  max-width: min(440px, 96vw);
+  max-height: min(72vh, 560px);
   background: linear-gradient(180deg, #141012 0%, #080606 100%);
   border: 1px solid var(--r-edge);
   border-radius: var(--r-radius);
@@ -1341,6 +1455,75 @@ li.is-selected .view-alerts-item {
 }
 .fc-drag:active {
   cursor: grabbing;
+}
+
+.fc-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--r-edge);
+  background: #0f0c0c;
+}
+.fc-tab {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--r-edge);
+  background: #151012;
+  color: var(--r-mute);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: var(--font-sora, "Sora", system-ui, sans-serif);
+}
+.fc-tab.is-on {
+  border-color: rgba(196, 160, 74, 0.45);
+  color: var(--r-gold);
+  background: linear-gradient(180deg, #1a1414, #100d0d);
+}
+
+.fc-scroll {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.fc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: #b8b4b0;
+}
+.fc-table th,
+.fc-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid #1a1012;
+  vertical-align: top;
+}
+.fc-table th {
+  color: var(--r-mute);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  background: #0f0c0c;
+  z-index: 1;
+}
+.fc-table td:nth-child(2),
+.fc-table td:nth-child(3) {
+  white-space: nowrap;
+  width: 1%;
+}
+.fc-wind,
+.fc-day-desc {
+  font-size: 10px;
+  color: #9a9692;
+  line-height: 1.35;
 }
 
 /* react-draggable adds this class to the panel root while dragging */
@@ -1445,20 +1628,50 @@ li.is-selected .view-alerts-item {
 }
 
 @media (max-width: 720px) {
-  .view-alerts-list {
-    grid-template-columns: 1fr;
-  }
+  /* Alerts top-right so viewport badge + map stay visible top-left */
   .view-alerts-anchor {
-    right: 8px;
-    left: 8px;
+    left: auto;
+    right: max(8px, env(safe-area-inset-right, 0px));
+    top: max(10px, env(safe-area-inset-top, 0px));
+    width: min(260px, calc(100vw - 120px));
     max-width: none;
   }
+  .view-alerts-floating {
+    min-width: 0;
+    max-height: min(30vh, 240px);
+    display: flex;
+    flex-direction: column;
+  }
+  .view-alerts-list {
+    grid-template-columns: 1fr;
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .map-view-origin-badge {
+    max-width: min(200px, calc(100vw - 140px));
+    font-size: 11px;
+  }
+
   .forecast-fab,
   .forecast-floating {
     right: 8px;
   }
+  .forecast-floating {
+    max-height: min(52dvh, 420px);
+    max-width: calc(100vw - 12px);
+  }
+
   .rowton-floating-stack {
     width: calc(100% - 12px);
+    max-height: min(40vh, 380px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .rowton-chrome {
     width: 100%;
@@ -1466,18 +1679,47 @@ li.is-selected .view-alerts-item {
   }
   .rowton-chrome__inner {
     padding: 8px 8px 10px;
+    gap: 10px 12px;
   }
-  .rowton-legend {
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid var(--r-edge);
-    padding: 6px 0 0 0;
+  .rowton-metric--loop {
+    flex: 1 1 100%;
+    min-width: 0;
   }
   .rowton-pill {
     min-width: 0;
+    padding: 6px 8px 7px 10px;
+  }
+  .rowton-pill__sub {
+    display: none;
+  }
+  .rowton-pill__main {
+    font-size: 12px;
+  }
+  .rr-logo__rowton {
+    font-size: 13px;
+  }
+  .rr-logo__radar {
+    font-size: 12px;
+    letter-spacing: 0.2em;
   }
   .rowton-btn-play {
     min-height: 38px;
+  }
+  .rowton-timeline {
+    padding: 6px 10px 8px;
+  }
+  .rowton-timeline__time {
+    font-size: 0.82rem;
+  }
+  .rowton-timeline__label {
+    font-size: 0.62rem;
+  }
+}
+
+/* Very narrow: drop legend strip so bottom chrome stays shorter */
+@media (max-width: 540px) {
+  .rowton-legend {
+    display: none;
   }
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Feature, Geometry } from "geojson";
 import AlertDetailsSidePanel from "@/components/AlertDetailsSidePanel";
 import ForecastWidget from "@/components/ForecastWidget";
+import MapViewOriginBadge from "@/components/MapViewOriginBadge";
 import RadarMap from "@/components/RadarMap";
 import RadarTimelineBar from "@/components/RadarTimelineBar";
 import ViewAlertsDraggablePanel from "@/components/ViewAlertsDraggablePanel";
@@ -106,6 +107,7 @@ export default function HomePage() {
   return (
     <main className="app-shell">
       <section className="map-host">
+        <MapViewOriginBadge centerLat={mapCenter.lat} centerLon={mapCenter.lon} />
         <RadarMap
           radarFrames={radarFrames}
           frameIndex={frameIndex}

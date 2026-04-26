@@ -11,6 +11,8 @@ import type { MapBounds } from "@/lib/alertsInView";
 
 /** RainViewer 512px global composite only serves z=0..7; higher z must be scaled from z=7. */
 const RAINVIEWER_MAX_NATIVE_ZOOM = 7;
+/** Mesonet CONUS tiles typically stop around z8; scale above that instead of 404s. */
+const MESONET_MAX_NATIVE_ZOOM = 8;
 
 type Props = {
   radarFrames: RadarFrame[];
@@ -204,15 +206,18 @@ export default function RadarMap({
       if (!radarLayerRef.current) {
         const isRainViewer = urlIsRainViewer(currentTileUrl);
         const layer = L.tileLayer(currentTileUrl, {
+          className: "rowton-radar-tiles",
+          zIndex: 250,
           opacity: Math.min(1, Math.max(0, radarOpacityRef.current)),
           noWrap: true,
           maxZoom: 20,
-          ...(isRainViewer ? { maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM } : {}),
+          ...(isRainViewer ? { maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM } : { maxNativeZoom: MESONET_MAX_NATIVE_ZOOM }),
           updateWhenIdle: true,
-          updateWhenZooming: false,
-          keepBuffer: 1
+          updateWhenZooming: true,
+          keepBuffer: 4
         });
         layer.addTo(m);
+        layer.bringToFront();
         radarLayerRef.current = layer;
 
         if (!labelsOnTopRef.current) {
@@ -238,6 +243,7 @@ export default function RadarMap({
         return;
       }
       radarLayerRef.current.setUrl(currentTileUrl);
+      radarLayerRef.current.bringToFront();
     });
     return () => {
       cancelled = true;
@@ -306,5 +312,10 @@ export default function RadarMap({
     radarLayer.setOpacity(Math.min(1, Math.max(0, radarOpacity)));
   }, [radarOpacity, radarAttached]);
 
-  return <div ref={containerRef} className="map-canvas" />;
+  return (
+    <div className="map-canvas-wrap">
+      <div ref={containerRef} className="map-canvas" />
+      <div className="map-crosshair" aria-hidden />
+    </div>
+  );
 }

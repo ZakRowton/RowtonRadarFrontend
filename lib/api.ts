@@ -154,7 +154,7 @@ async function getRainViewerFramesDirect(): Promise<RainViewerItem[]> {
   if (rvDirectFramesCache && now - rvDirectFramesCache.at < RV_FRAMES_TTL_MS) {
     return rvDirectFramesCache.frames;
   }
-  const res = await fetch(RAINVIEWER_PUBLIC_MAPS, { cache: "no-store" });
+  const res = await fetch(RAINVIEWER_PUBLIC_MAPS, { cache: "default" });
   if (!res.ok) {
     throw new Error(`RainViewer maps HTTP ${res.status}`);
   }
@@ -258,19 +258,26 @@ export async function fetchFrames(product: Product): Promise<RadarFrame[]> {
   let raw: RainViewerItem[] = [];
 
   try {
-    const { frames } = await getRainViewerFrameList();
-    if (frames.length > 0) {
-      raw = frames;
-    }
+    raw = await Promise.any([
+      getRainViewerFrameList().then((r) => {
+        if (!r.frames.length) throw new Error("empty-api");
+        return r.frames;
+      }),
+      getRainViewerFramesDirect()
+    ]);
   } catch {
-    raw = [];
-  }
-
-  if (raw.length === 0) {
     try {
-      raw = await getRainViewerFramesDirect();
+      const { frames } = await getRainViewerFrameList();
+      if (frames.length > 0) raw = frames;
     } catch {
       raw = [];
+    }
+    if (raw.length === 0) {
+      try {
+        raw = await getRainViewerFramesDirect();
+      } catch {
+        raw = [];
+      }
     }
   }
 
@@ -305,6 +312,27 @@ export async function fetchFrames(product: Product): Promise<RadarFrame[]> {
 /**
  * IANA time zone for map center (Open-Meteo). For display of frame time in the viewed area.
  */
+export type ViewportPlaceResult =
+  | {
+      ok: true;
+      city?: string | null;
+      state?: string | null;
+      county?: string | null;
+      lat: number;
+      lon: number;
+    }
+  | { ok: false; error?: string | null; lat: number; lon: number };
+
+export async function fetchViewportPlace(lat: number, lon: number): Promise<ViewportPlaceResult> {
+  const q = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+  const r = await fetch(`${apiUrl("geo/viewport-place")}?${q.toString()}`, { cache: "no-store" });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(messageForApiFetchFailure(r.status, t));
+  }
+  return (await r.json()) as ViewportPlaceResult;
+}
+
 export async function fetchMapAreaTimeZone(
   lat: number,
   lon: number

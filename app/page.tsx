@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, Geometry } from "geojson";
 import AlertDetailsSidePanel from "@/components/AlertDetailsSidePanel";
 import ForecastWidget from "@/components/ForecastWidget";
@@ -40,7 +40,7 @@ const PRODUCT_COPY: Record<
 export default function HomePage() {
   const [product, setProduct] = useState<Product>("reflectivity");
   const [playing, setPlaying] = useState(true);
-  const [frameDurationMs, setFrameDurationMs] = useState(700);
+  const [frameDurationMs, setFrameDurationMs] = useState(1400);
   const [radarOpacity, setRadarOpacity] = useState(0.88);
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [frameIndex, setFrameIndex] = useState(0);
@@ -87,13 +87,63 @@ export default function HomePage() {
     };
   }, [product]);
 
+  const playingRef = useRef(playing);
+  const frameDurationRef = useRef(frameDurationMs);
+  const radarCountRef = useRef(radarFrames.length);
+  const advanceTimerRef = useRef<number | null>(null);
+  const didMountRef = useRef(false);
+  const wasPlayingRef = useRef(false);
+
   useEffect(() => {
-    if (!playing || radarFrames.length < 2) return;
-    const t = window.setInterval(() => {
-      setFrameIndex((i) => (i + 1) % radarFrames.length);
-    }, frameDurationMs);
-    return () => window.clearInterval(t);
-  }, [playing, frameDurationMs, radarFrames.length]);
+    playingRef.current = playing;
+  }, [playing]);
+  useEffect(() => {
+    frameDurationRef.current = frameDurationMs;
+  }, [frameDurationMs]);
+  useEffect(() => {
+    radarCountRef.current = radarFrames.length;
+  }, [radarFrames.length]);
+
+  const clearAdvanceTimer = useCallback(() => {
+    if (advanceTimerRef.current != null) {
+      window.clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  }, []);
+
+  const onRadarFrameTilesSettled = useCallback(() => {
+    if (!playingRef.current) return;
+    const n = radarCountRef.current;
+    if (n < 2) return;
+    clearAdvanceTimer();
+    advanceTimerRef.current = window.setTimeout(() => {
+      advanceTimerRef.current = null;
+      if (!playingRef.current) return;
+      setFrameIndex((i) => (i + 1) % radarCountRef.current);
+    }, frameDurationRef.current);
+  }, [clearAdvanceTimer]);
+
+  useEffect(() => {
+    if (!playing) {
+      clearAdvanceTimer();
+    }
+  }, [playing, clearAdvanceTimer]);
+
+  useEffect(() => {
+    clearAdvanceTimer();
+  }, [product, clearAdvanceTimer]);
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      wasPlayingRef.current = playing;
+      return;
+    }
+    if (playing && !wasPlayingRef.current && radarFrames.length >= 2) {
+      window.setTimeout(() => onRadarFrameTilesSettled(), 0);
+    }
+    wasPlayingRef.current = playing;
+  }, [playing, radarFrames.length, onRadarFrameTilesSettled]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -118,6 +168,7 @@ export default function HomePage() {
             setMapCenter(center);
           }}
           onSelectAlert={setSelectedFeature}
+          onRadarFrameTilesSettled={onRadarFrameTilesSettled}
         />
         <div className="map-viewport-crosshair" aria-hidden>
           <span className="map-viewport-crosshair__reticle" />
@@ -211,21 +262,21 @@ export default function HomePage() {
                       </button>
                     </div>
                     <div className="rowton-metric__slider">
-                      <label className="rowton-sr" htmlFor="rowton-frame-dur">
-                        Time between frames
-                      </label>
-                      <input
-                        id="rowton-frame-dur"
-                        className="rowton-range"
-                        type="range"
-                        min={250}
-                        max={1400}
-                        step={50}
-                        value={frameDurationMs}
-                        onChange={(e) => setFrameDurationMs(Number(e.target.value))}
-                        aria-label="Time between each radar frame in the loop"
-                      />
-                      <span className="rowton-value">{frameDurationMs}ms</span>
+                      <label className="rowton-sr" htmlFor="rowton-frame-dur">Animation speed</label>
+                      <div className="rowton-metric__speed">
+                        <span className="rowton-metric__label">Speed</span>
+                        <input
+                          id="rowton-frame-dur"
+                          className="rowton-range rowton-range--long"
+                          type="range"
+                          min={300}
+                          max={2500}
+                          step={50}
+                          value={frameDurationMs}
+                          onChange={(e) => setFrameDurationMs(Number(e.target.value))}
+                          aria-label="Animation speed, faster to the left, slower to the right"
+                        />
+                      </div>
                     </div>
                   </div>
 

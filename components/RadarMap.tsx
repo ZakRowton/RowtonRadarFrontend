@@ -21,6 +21,8 @@ type Props = {
   activeAlerts: ActiveAlertsResponse | null;
   onViewChange: (p: { bounds: MapBounds; center: { lat: number; lon: number } }) => void;
   onSelectAlert: (feature: Feature<Geometry, Record<string, unknown> | null>) => void;
+  /** Fires when the visible frame’s tile grid has finished loading (or fallback timeout). Drives time-loop advance. */
+  onRadarFrameTilesSettled?: () => void;
 };
 
 function alertColor(eventName: string): string {
@@ -31,13 +33,30 @@ function alertColor(eventName: string): string {
   return "#76a9ff";
 }
 
+const TILE_SETTLE_FALLBACK_MS = 10_000;
+
+function attachTileLayerSettled(layer: TileLayer, onSettled: () => void, cancelled: () => boolean) {
+  let done = false;
+  const fire = () => {
+    if (done || cancelled()) return;
+    done = true;
+    onSettled();
+  };
+  const t = window.setTimeout(fire, TILE_SETTLE_FALLBACK_MS);
+  layer.once("load", () => {
+    window.clearTimeout(t);
+    fire();
+  });
+}
+
 export default function RadarMap({
   radarFrames,
   frameIndex,
   radarOpacity,
   activeAlerts,
   onViewChange,
-  onSelectAlert
+  onSelectAlert,
+  onRadarFrameTilesSettled
 }: Props) {
   const mapRef = useRef<LeafletMap | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -51,6 +70,8 @@ export default function RadarMap({
   onViewRef.current = onViewChange;
   const radarOpacityRef = useRef(radarOpacity);
   radarOpacityRef.current = radarOpacity;
+  const onTilesSettledRef = useRef(onRadarFrameTilesSettled);
+  onTilesSettledRef.current = onRadarFrameTilesSettled;
 
   const [mapReady, setMapReady] = useState(false);
   const [radarAttached, setRadarAttached] = useState(false);
@@ -212,13 +233,20 @@ export default function RadarMap({
           noWrap: true,
           maxZoom: 20,
           ...(isRainViewer ? { maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM } : { maxNativeZoom: MESONET_MAX_NATIVE_ZOOM }),
-          updateWhenIdle: true,
+          updateWhenIdle: false,
           updateWhenZooming: true,
-          keepBuffer: 4
+          keepBuffer: 6
         });
         layer.addTo(m);
         layer.bringToFront();
         radarLayerRef.current = layer;
+        if (!cancelled) {
+          attachTileLayerSettled(
+            layer,
+            () => onTilesSettledRef.current?.(),
+            () => cancelled
+          );
+        }
 
         if (!labelsOnTopRef.current) {
           m.createPane("mapLabelOverlay");
@@ -242,8 +270,12 @@ export default function RadarMap({
         setRadarAttached(true);
         return;
       }
-      radarLayerRef.current.setUrl(currentTileUrl);
-      radarLayerRef.current.bringToFront();
+      const rLayer = radarLayerRef.current;
+      rLayer.setUrl(currentTileUrl);
+      rLayer.bringToFront();
+      if (!cancelled) {
+        attachTileLayerSettled(rLayer, () => onTilesSettledRef.current?.(), () => cancelled);
+      }
     });
     return () => {
       cancelled = true;

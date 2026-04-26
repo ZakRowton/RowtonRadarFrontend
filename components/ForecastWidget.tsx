@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Draggable from "react-draggable";
 import { fetchForecastPanel, type ForecastPanel } from "@/lib/forecastApi";
+import { usePanelResize } from "@/lib/usePanelResize";
 
 type Props = {
   centerLat: number;
   centerLon: number;
+  /** Your location — enables the Home tab. */
+  home: { lat: number; lon: number } | null;
 };
 
-type Tab = "current" | "conditions" | "hourly" | "daily";
+type Tab = "current" | "home" | "conditions" | "hourly" | "daily";
 
 function formatLocalTime(
   iso: string | null | undefined,
@@ -29,39 +32,58 @@ function hourLabel(iso: string | null | undefined, timeZone: string | undefined)
   return formatLocalTime(iso, timeZone, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export default function ForecastWidget({ centerLat, centerLon }: Props) {
+export default function ForecastWidget({ centerLat, centerLon, home }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("current");
   const [data, setData] = useState<ForecastPanel | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
+  const { heightPx, onResizeDown, onResizeMove, onResizeUp } = usePanelResize("forecast", nodeRef, {
+    min: 120,
+    max: 780
+  });
 
   const load = useCallback(async () => {
+    if (tab === "home" && !home) {
+      setData(null);
+      setErr("Your location is not set yet. Allow location in the browser or use the app until GPS works.");
+      setLoading(false);
+      return;
+    }
+    const lat = tab === "home" && home ? home.lat : centerLat;
+    const lon = tab === "home" && home ? home.lon : centerLon;
     setLoading(true);
     setErr(null);
     try {
-      setData(await fetchForecastPanel(centerLat, centerLon));
+      setData(await fetchForecastPanel(lat, lon));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [centerLat, centerLon]);
+  }, [centerLat, centerLon, home, tab]);
 
   useEffect(() => {
     if (open) void load();
   }, [open, load]);
 
+  useEffect(() => {
+    if (tab === "home" && !home) setTab("current");
+  }, [tab, home]);
+
   const tz = data?.time_zone || undefined;
   const quads = data?.conditions_quadrants ?? [];
   const tabs: { id: Tab; label: string }[] = [
     { id: "current", label: "Current" },
+    ...(home ? ([{ id: "home" as const, label: "Home" }] as const) : []),
     { id: "conditions", label: "Conditions" },
     { id: "hourly", label: "Hourly" },
     { id: "daily", label: "10-day" }
   ];
+  const dataLat = tab === "home" && home ? home.lat : centerLat;
+  const dataLon = tab === "home" && home ? home.lon : centerLon;
 
   return (
     <>
@@ -77,7 +99,7 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
         <Draggable
           nodeRef={nodeRef}
           handle=".fc-drag"
-          cancel="button,table,.fc-scroll"
+          cancel="button,table,.fc-scroll,.fc-resize,input"
           onStart={() => {
             const sel = typeof window !== "undefined" ? window.getSelection() : null;
             if (sel && sel.rangeCount > 0) {
@@ -85,7 +107,11 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
             }
           }}
         >
-          <div className="forecast-floating" ref={nodeRef}>
+          <div
+            className={`forecast-floating ${heightPx != null ? "is-sized" : ""}`}
+            ref={nodeRef}
+            style={heightPx != null ? { height: heightPx, maxHeight: "min(90dvh, 820px)" } : undefined}
+          >
             <div className="fc-drag" title="Drag">
               Forecast
               <button type="button" className="fc-close" onClick={() => setOpen(false)} aria-label="Close">
@@ -112,8 +138,9 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
               {data && !loading && (
                 <>
                   <p className="fc-loc">
+                    {tab === "home" && <span className="fc-loc--tag">Home</span>}{" "}
                     {data.place ? `${data.place} · ` : ""}
-                    {centerLat.toFixed(3)}°, {centerLon.toFixed(3)}°
+                    {dataLat.toFixed(3)}°, {dataLon.toFixed(3)}°
                     {data.time_zone ? ` · ${data.time_zone}` : ""}
                   </p>
 
@@ -173,6 +200,51 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
                         <li>
                           <span>Sunset</span>
                           <b>{formatLocalTime(data.sunset, tz, { hour: "numeric", minute: "2-digit" })}</b>
+                        </li>
+                      </ul>
+                    </>
+                  )}
+
+                  {tab === "home" && (
+                    <>
+                      {data.precip_soon && (
+                        <p className="fc-precip-soon" role="status">
+                          {data.precip_soon.summary}
+                        </p>
+                      )}
+
+                      <p className="fc-headline">{data.short_description || "—"}</p>
+                      {data.narrative_detail && <p className="fc-narrative-detail">{data.narrative_detail}</p>}
+
+                      <ul className="fc-stats">
+                        <li>
+                          <span>Temp</span>
+                          <b>{data.current_temp_f != null ? `${data.current_temp_f}°F` : "—"}</b>
+                        </li>
+                        <li>
+                          <span>High / low today</span>
+                          <b>
+                            {data.today_high_f != null ? `${data.today_high_f}°` : "—"} /{" "}
+                            {data.today_low_f != null ? `${data.today_low_f}°` : "—"}F
+                          </b>
+                        </li>
+                        <li>
+                          <span>Pressure</span>
+                          <b>
+                            {data.pressure_inhg != null
+                              ? `${data.pressure_inhg} inHg`
+                              : data.pressure_mb != null
+                                ? `${data.pressure_mb} mb`
+                                : "—"}
+                          </b>
+                        </li>
+                        <li>
+                          <span>Humidity</span>
+                          <b>{data.humidity != null ? `${Math.round(data.humidity)}%` : "—"}</b>
+                        </li>
+                        <li>
+                          <span>Wind</span>
+                          <b>{data.wind || "—"}</b>
                         </li>
                       </ul>
                     </>
@@ -258,6 +330,18 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
                 </>
               )}
             </div>
+            <div
+              className="fc-resize"
+              onPointerDown={onResizeDown}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeUp}
+              onPointerCancel={onResizeUp}
+              title="Drag to resize height"
+              aria-label="Resize forecast panel"
+              role="slider"
+              aria-orientation="vertical"
+              tabIndex={0}
+            />
           </div>
         </Draggable>
       )}

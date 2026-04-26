@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from "react";
 import centroid from "@turf/centroid";
 import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import { type RadarFrame } from "@/lib/api";
@@ -14,6 +14,10 @@ const RAINVIEWER_MAX_NATIVE_ZOOM = 7;
 /** Mesonet CONUS tiles typically stop around z8; scale above that instead of 404s. */
 const MESONET_MAX_NATIVE_ZOOM = 8;
 
+export type RadarMapHandle = {
+  flyTo: (lat: number, lon: number, zoom?: number) => void;
+};
+
 type Props = {
   radarFrames: RadarFrame[];
   frameIndex: number;
@@ -23,6 +27,8 @@ type Props = {
   onSelectAlert: (feature: Feature<Geometry, Record<string, unknown> | null>) => void;
   /** Fires when the visible frame’s tile grid has finished loading (or fallback timeout). Drives time-loop advance. */
   onRadarFrameTilesSettled?: () => void;
+  /** Fires once when the browser’s geolocation succeeds; parent can persist as “home”. */
+  onUserLocation?: (p: { lat: number; lon: number }) => void;
 };
 
 function alertColor(eventName: string): string {
@@ -49,15 +55,10 @@ function attachTileLayerSettled(layer: TileLayer, onSettled: () => void, cancell
   });
 }
 
-export default function RadarMap({
-  radarFrames,
-  frameIndex,
-  radarOpacity,
-  activeAlerts,
-  onViewChange,
-  onSelectAlert,
-  onRadarFrameTilesSettled
-}: Props) {
+const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
+  { radarFrames, frameIndex, radarOpacity, activeAlerts, onViewChange, onSelectAlert, onRadarFrameTilesSettled, onUserLocation },
+  ref
+) {
   const mapRef = useRef<LeafletMap | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const radarLayerRef = useRef<TileLayer | null>(null);
@@ -72,6 +73,8 @@ export default function RadarMap({
   radarOpacityRef.current = radarOpacity;
   const onTilesSettledRef = useRef(onRadarFrameTilesSettled);
   onTilesSettledRef.current = onRadarFrameTilesSettled;
+  const onUserLocationRef = useRef(onUserLocation);
+  onUserLocationRef.current = onUserLocation;
 
   const [mapReady, setMapReady] = useState(false);
   const [radarAttached, setRadarAttached] = useState(false);
@@ -92,6 +95,19 @@ export default function RadarMap({
       center: { lat: c.lat, lon: c.lng }
     });
   }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flyTo(lat, lon, zoom = 9) {
+        const m = mapRef.current;
+        if (!m) return;
+        m.setView([lat, lon], zoom, { animate: true });
+        window.setTimeout(fireView, 0);
+      }
+    }),
+    [fireView]
+  );
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -160,6 +176,7 @@ export default function RadarMap({
             if (!map) return;
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
+            onUserLocationRef.current?.({ lat, lon });
             map.setView([lat, lon], 8, { animate: false });
             map.setMinZoom(2);
             map.setMaxZoom(20);
@@ -349,4 +366,6 @@ export default function RadarMap({
       <div ref={containerRef} className="map-canvas" />
     </div>
   );
-}
+});
+
+export default RadarMap;

@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Feature, Geometry } from "geojson";
 import AlertDetailsSidePanel from "@/components/AlertDetailsSidePanel";
 import ForecastWidget from "@/components/ForecastWidget";
+import HomeLocationBar from "@/components/HomeLocationBar";
 import MapViewOriginBadge from "@/components/MapViewOriginBadge";
-import RadarMap from "@/components/RadarMap";
+import ProactiveAlertBanners from "@/components/ProactiveAlertBanners";
+import RadarMap, { type RadarMapHandle } from "@/components/RadarMap";
 import RadarTimelineBar from "@/components/RadarTimelineBar";
 import ViewAlertsDraggablePanel from "@/components/ViewAlertsDraggablePanel";
 import {
@@ -18,6 +20,7 @@ import {
 } from "@/lib/api";
 import { getNwsFeatureId } from "@/lib/alertDisplay";
 import type { MapBounds } from "@/lib/alertsInView";
+import { readHomeFromStorage, writeHomeToStorage } from "@/lib/homeLocationStorage";
 
 const PRODUCT_COPY: Record<
   Product,
@@ -50,9 +53,21 @@ export default function HomePage() {
   const [radarFetchError, setRadarFetchError] = useState<string | null>(null);
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const [mapCenter, setMapCenter] = useState({ lat: 38, lon: -97 });
+  const [homeLocation, setHomeLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<Feature<Geometry, Record<string, unknown> | null> | null>(
     null
   );
+  const mapRef = useRef<RadarMapHandle | null>(null);
+
+  useEffect(() => {
+    const s = readHomeFromStorage();
+    if (s) setHomeLocation({ lat: s.lat, lon: s.lon });
+  }, []);
+
+  const onUserDeviceLocation = useCallback((p: { lat: number; lon: number }) => {
+    setHomeLocation(p);
+    writeHomeToStorage(p.lat, p.lon);
+  }, []);
 
   useEffect(() => {
     void fetchActiveAlerts()
@@ -157,8 +172,27 @@ export default function HomePage() {
   return (
     <main className="app-shell">
       <section className="map-host">
-        <MapViewOriginBadge centerLat={mapCenter.lat} centerLon={mapCenter.lon} />
+        <div className="map-top-hud" aria-label="Map info and location">
+          <ProactiveAlertBanners
+            alerts={alerts}
+            homeLat={homeLocation?.lat ?? null}
+            homeLon={homeLocation?.lon ?? null}
+            mapCenterLat={mapCenter.lat}
+            mapCenterLon={mapCenter.lon}
+          />
+          <div className="map-geo-stack">
+            <HomeLocationBar
+              home={homeLocation}
+              onGoHome={() => {
+                if (!homeLocation) return;
+                mapRef.current?.flyTo(homeLocation.lat, homeLocation.lon, 10);
+              }}
+            />
+            <MapViewOriginBadge centerLat={mapCenter.lat} centerLon={mapCenter.lon} />
+          </div>
+        </div>
         <RadarMap
+          ref={mapRef}
           radarFrames={radarFrames}
           frameIndex={frameIndex}
           radarOpacity={radarOpacity}
@@ -169,6 +203,7 @@ export default function HomePage() {
           }}
           onSelectAlert={setSelectedFeature}
           onRadarFrameTilesSettled={onRadarFrameTilesSettled}
+          onUserLocation={onUserDeviceLocation}
         />
         <div className="map-viewport-crosshair" aria-hidden>
           <span className="map-viewport-crosshair__reticle" />
@@ -176,11 +211,16 @@ export default function HomePage() {
         <ViewAlertsDraggablePanel
           alerts={alerts}
           mapBounds={mapBounds}
+          homePoint={homeLocation}
           onSelectFeature={setSelectedFeature}
           fetchError={alertsFetchError}
           selectedId={selectedFeature ? getNwsFeatureId(selectedFeature) : null}
         />
-        <ForecastWidget centerLat={mapCenter.lat} centerLon={mapCenter.lon} />
+        <ForecastWidget
+          centerLat={mapCenter.lat}
+          centerLon={mapCenter.lon}
+          home={homeLocation}
+        />
         <AlertDetailsSidePanel feature={selectedFeature} onClose={() => setSelectedFeature(null)} />
 
         <div className="rowton-floating-stack" aria-label="Map area and map controls">

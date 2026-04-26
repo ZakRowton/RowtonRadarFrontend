@@ -9,7 +9,7 @@ type Props = {
   centerLon: number;
 };
 
-type Tab = "today" | "hourly" | "daily";
+type Tab = "current" | "conditions" | "hourly" | "daily";
 
 function formatLocalTime(
   iso: string | null | undefined,
@@ -31,7 +31,7 @@ function hourLabel(iso: string | null | undefined, timeZone: string | undefined)
 
 export default function ForecastWidget({ centerLat, centerLon }: Props) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>("current");
   const [data, setData] = useState<ForecastPanel | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,13 +55,20 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
   }, [open, load]);
 
   const tz = data?.time_zone || undefined;
+  const quads = data?.conditions_quadrants ?? [];
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "current", label: "Current" },
+    { id: "conditions", label: "Conditions" },
+    { id: "hourly", label: "Hourly" },
+    { id: "daily", label: "10-day" }
+  ];
 
   return (
     <>
       <button
         type="button"
         className="forecast-fab"
-        title="Forecast: NWS grid + hourly (US). Pressure from OpenWeatherMap if configured."
+        title="Forecast: NWS grid, hourly, Open-Meteo pressure and pollen, optional OpenWeatherMap"
         onClick={() => setOpen((v) => !v)}
       >
         <span>Forecast</span>
@@ -86,16 +93,16 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
               </button>
             </div>
             <div className="fc-tabs" role="tablist" aria-label="Forecast sections">
-              {(["today", "hourly", "daily"] as const).map((t) => (
+              {tabs.map(({ id, label }) => (
                 <button
-                  key={t}
+                  key={id}
                   type="button"
                   role="tab"
-                  aria-selected={tab === t}
-                  className={`fc-tab ${tab === t ? "is-on" : ""}`}
-                  onClick={() => setTab(t)}
+                  aria-selected={tab === id}
+                  className={`fc-tab ${tab === id ? "is-on" : ""}`}
+                  onClick={() => setTab(id)}
                 >
-                  {t === "today" ? "Now" : t === "hourly" ? "Hourly" : "10-day"}
+                  {label}
                 </button>
               ))}
             </div>
@@ -110,19 +117,20 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
                     {data.time_zone ? ` · ${data.time_zone}` : ""}
                   </p>
 
-                  {tab === "today" && (
+                  {tab === "current" && (
                     <>
+                      {data.precip_soon && (
+                        <p className="fc-precip-soon" role="status">
+                          {data.precip_soon.summary}
+                        </p>
+                      )}
+
+                      <p className="fc-headline">{data.short_description || "—"}</p>
+                      {data.narrative_detail && <p className="fc-narrative-detail">{data.narrative_detail}</p>}
+
                       <ul className="fc-stats">
                         <li>
-                          <span>Sunrise</span>
-                          <b>{formatLocalTime(data.sunrise, tz, { hour: "numeric", minute: "2-digit" })}</b>
-                        </li>
-                        <li>
-                          <span>Sunset</span>
-                          <b>{formatLocalTime(data.sunset, tz, { hour: "numeric", minute: "2-digit" })}</b>
-                        </li>
-                        <li>
-                          <span>Temp now</span>
+                          <span>Temp</span>
                           <b>{data.current_temp_f != null ? `${data.current_temp_f}°F` : "—"}</b>
                         </li>
                         <li>
@@ -131,10 +139,6 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
                             {data.today_high_f != null ? `${data.today_high_f}°` : "—"} /{" "}
                             {data.today_low_f != null ? `${data.today_low_f}°` : "—"}F
                           </b>
-                        </li>
-                        <li>
-                          <span>Humidity</span>
-                          <b>{data.humidity != null ? `${Math.round(data.humidity)}%` : "—"}</b>
                         </li>
                         <li>
                           <span>Pressure</span>
@@ -147,12 +151,46 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
                           </b>
                         </li>
                         <li>
+                          <span>Humidity</span>
+                          <b>{data.humidity != null ? `${Math.round(data.humidity)}%` : "—"}</b>
+                        </li>
+                        <li>
+                          <span>Dew point</span>
+                          <b>{data.dewpoint_f != null ? `${data.dewpoint_f}°F` : "—"}</b>
+                        </li>
+                        <li>
+                          <span>Pollen (outdoor)</span>
+                          <b>{data.pollen_summary != null && data.pollen_summary !== "" ? data.pollen_summary : "—"}</b>
+                        </li>
+                        <li>
                           <span>Wind</span>
                           <b>{data.wind || "—"}</b>
                         </li>
+                        <li>
+                          <span>Sunrise</span>
+                          <b>{formatLocalTime(data.sunrise, tz, { hour: "numeric", minute: "2-digit" })}</b>
+                        </li>
+                        <li>
+                          <span>Sunset</span>
+                          <b>{formatLocalTime(data.sunset, tz, { hour: "numeric", minute: "2-digit" })}</b>
+                        </li>
                       </ul>
-                      <p className="fc-narrative">{data.short_description || "—"}</p>
                     </>
+                  )}
+
+                  {tab === "conditions" && (
+                    <ul className="fc-conditions">
+                      {quads.length === 0 && <li className="fc-conditions__empty">No time-of-day data.</li>}
+                      {quads.map((q) => (
+                        <li key={q.label} className="fc-conditions__row">
+                          <div className="fc-conditions__top">
+                            <span className="fc-conditions__name">{q.label}</span>
+                            {q.temp_f != null && <span className="fc-conditions__temp">~{Math.round(q.temp_f)}°F</span>}
+                          </div>
+                          <p className="fc-conditions__desc">{q.description || "—"}</p>
+                        </li>
+                      ))}
+                    </ul>
                   )}
 
                   {tab === "hourly" && (
@@ -206,15 +244,16 @@ export default function ForecastWidget({ centerLat, centerLon }: Props) {
                   )}
 
                   <p className="fc-attr">
-                    Data from{" "}
+                    Grid and hourly:{" "}
                     <a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noreferrer">
-                      api.weather.gov
+                      NWS
                     </a>
-                    . Barometric pressure from{" "}
-                    <a href="https://openweathermap.org/api" target="_blank" rel="noreferrer">
-                      OpenWeatherMap
-                    </a>{" "}
-                    when <code>OPENWEATHERMAP_API_KEY</code> is set on the API server.
+                    . Surface pressure (when NWS+OWM not used):{" "}
+                    <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+                      Open-Meteo
+                    </a>
+                    . Pollen where available: Open-Meteo air-quality. Add{" "}
+                    <code>OPENWEATHERMAP_API_KEY</code> on the server for OWM (pressure/wind can refine).
                   </p>
                 </>
               )}

@@ -37,12 +37,20 @@ export type ForecastHourlyRow = {
   short_forecast?: string | null;
 };
 
+export type ConditionsQuadrant = {
+  label: string;
+  description: string;
+  temp_f?: number | null;
+  representative_time?: string | null;
+};
+
 export type ForecastPanel = {
   place?: string | null;
   time_zone?: string | null;
   sunrise?: string | null;
   sunset?: string | null;
   current_temp_f?: number | null;
+  dewpoint_f?: number | null;
   today_high_f?: number | null;
   today_low_f?: number | null;
   humidity?: number | null;
@@ -50,6 +58,13 @@ export type ForecastPanel = {
   pressure_mb?: number | null;
   pressure_inhg?: number | null;
   short_description?: string | null;
+  /** NWS first-period detailed narrative (outlook) */
+  narrative_detail?: string | null;
+  conditions_quadrants?: ConditionsQuadrant[];
+  /** Next hour with precip signal within ~60 min */
+  precip_soon?: { minutes: number; summary: string } | null;
+  /** e.g. Low/Moderate from Open-Meteo air-quality pollen when available */
+  pollen_summary?: string | null;
   daily: ForecastDailyRow[];
   hourly: ForecastHourlyRow[];
 };

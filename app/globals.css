@@ -1561,14 +1561,16 @@ li.is-selected .view-alerts-item {
 
 .fc-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--r-edge);
   background: #0f0c0c;
 }
 .fc-tab {
-  flex: 1;
-  padding: 6px 8px;
+  flex: 1 1 4.4rem;
+  min-width: 0;
+  padding: 6px 6px;
   border-radius: 6px;
   border: 1px solid var(--r-edge);
   background: #151012;
@@ -1689,6 +1691,78 @@ li.is-selected .view-alerts-item {
 .fc-stats b {
   color: var(--r-silver-bright);
   font-size: 13px;
+}
+.fc-precip-soon {
+  margin: 0 0 10px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e8c86b;
+  background: linear-gradient(135deg, rgba(80, 40, 20, 0.45), rgba(40, 18, 10, 0.35));
+  border: 1px solid rgba(196, 160, 74, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.25);
+}
+.fc-headline {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--r-silver-bright);
+  line-height: 1.3;
+}
+.fc-narrative-detail {
+  margin: 0 0 12px 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #a8a29e;
+}
+.fc-conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fc-conditions__row {
+  padding: 8px 0 10px;
+  border-bottom: 1px solid #1a1012;
+}
+.fc-conditions__row:last-of-type {
+  border-bottom: none;
+}
+.fc-conditions__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.fc-conditions__name {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--r-gold);
+}
+.fc-conditions__temp {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--r-silver-bright);
+  font-feature-settings: "tnum" 1;
+  flex-shrink: 0;
+}
+.fc-conditions__desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b8b4b0;
+}
+.fc-conditions__empty {
+  margin: 0;
+  color: var(--r-mute);
+  font-style: italic;
+  font-size: 12px;
 }
 .fc-narrative {
   margin: 8px 0 0;

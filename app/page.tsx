@@ -119,6 +119,9 @@ export default function HomePage() {
           }}
           onSelectAlert={setSelectedFeature}
         />
+        <div className="map-viewport-crosshair" aria-hidden>
+          <span className="map-viewport-crosshair__reticle" />
+        </div>
         <ViewAlertsDraggablePanel
           alerts={alerts}
           mapBounds={mapBounds}

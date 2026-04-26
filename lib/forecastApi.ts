@@ -1,5 +1,8 @@
 import { apiUrl, messageForApiFetchFailure } from "./api";
 
+/** Same-origin Next route (NWS + optional OWM). Avoids 404 when `__api` rewrites to an old backend. */
+const FORECAST_PANEL_PATH = "/api/forecast/panel";
+
 export type AggregatedForecast = {
   temperature_f: number | null;
   wind_mph: number | null;
@@ -53,7 +56,7 @@ export type ForecastPanel = {
 
 export async function fetchForecastPanel(lat: number, lon: number): Promise<ForecastPanel> {
   const q = new URLSearchParams({ lat: String(lat), lon: String(lon) });
-  const r = await fetch(`${apiUrl("forecast/panel")}?${q.toString()}`, { cache: "no-store" });
+  const r = await fetch(`${FORECAST_PANEL_PATH}?${q.toString()}`, { cache: "no-store" });
   if (!r.ok) {
     const t = await r.text();
     throw new Error(messageForApiFetchFailure(r.status, t));

@@ -1,5 +1,8 @@
 const PROXY = "/__api";
 
+/** NWS place lookup via Next — avoids 404 on hosts without FastAPI /geo route. */
+const VIEWPORT_PLACE_PATH = "/api/geo/viewport-place";
+
 /**
  * When Next’s `/__api` rewrite cannot reach FastAPI, the browser often sees HTTP 500 with body
  * "Internal Server Error" — not a bug inside the forecast route. Map that to a clear hint.
@@ -325,7 +328,7 @@ export type ViewportPlaceResult =
 
 export async function fetchViewportPlace(lat: number, lon: number): Promise<ViewportPlaceResult> {
   const q = new URLSearchParams({ lat: String(lat), lon: String(lon) });
-  const r = await fetch(`${apiUrl("geo/viewport-place")}?${q.toString()}`, { cache: "no-store" });
+  const r = await fetch(`${VIEWPORT_PLACE_PATH}?${q.toString()}`, { cache: "no-store" });
   if (!r.ok) {
     const t = await r.text();
     throw new Error(messageForApiFetchFailure(r.status, t));

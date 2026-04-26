@@ -315,7 +315,6 @@ export default function RadarMap({
   return (
     <div className="map-canvas-wrap">
       <div ref={containerRef} className="map-canvas" />
-      <div className="map-crosshair" aria-hidden />
     </div>
   );
 }

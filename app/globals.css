@@ -69,34 +69,55 @@ body {
   bottom: 0;
 }
 
-/* Semi-transparent crosshairs at viewport center (map center = data origin). */
-.map-crosshair {
+/* Viewport center crosshair: lives in .map-host (sibling to map) so it stacks *above* the
+   Leaflet map and z-index:0 map wrap, but *below* alerts (1000) + badge (1004) + forecast. */
+.map-viewport-crosshair {
   pointer-events: none;
   position: absolute;
   inset: 0;
-  z-index: 520;
+  z-index: 900;
+  overflow: hidden;
 }
-.map-crosshair::before {
+/* Dark edge + light center so it reads on light basemap, radar, and labels. */
+.map-viewport-crosshair::before {
   content: "";
   position: absolute;
+  z-index: 0;
   left: 50%;
   top: 0;
   bottom: 0;
-  width: 1px;
-  transform: translateX(-50%);
-  background: rgba(240, 228, 210, 0.28);
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+  width: 2px;
+  margin-left: -1px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(50, 46, 42, 0.2) 35%, rgba(255, 255, 255, 0.5) 50%, rgba(50, 46, 42, 0.2) 65%, rgba(0, 0, 0, 0.55) 100%);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
 }
-.map-crosshair::after {
+.map-viewport-crosshair::after {
   content: "";
   position: absolute;
+  z-index: 0;
   left: 0;
   right: 0;
   top: 50%;
-  height: 1px;
-  transform: translateY(-50%);
-  background: rgba(240, 228, 210, 0.28);
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(50, 46, 42, 0.2) 35%, rgba(255, 255, 255, 0.5) 50%, rgba(50, 46, 42, 0.2) 65%, rgba(0, 0, 0, 0.55) 100%);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+.map-viewport-crosshair__reticle {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.45), inset 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 /* Leaflet applies mix-blend-mode: plus-lighter to all tile images; upscaled radar (maxNativeZoom)
@@ -135,31 +156,32 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--r-silver-bright);
-  line-height: 1.25;
-}
-.map-view-origin-badge__county {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 8px;
-  font-size: 12px;
   line-height: 1.3;
 }
-.map-view-origin-badge__county--muted {
+.map-view-origin-badge__line--place2 {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #e0dcd4;
+  min-height: 1.1em;
+}
+.map-view-origin-badge__countyline {
+  font-weight: 600;
+  color: #c8c2b8;
+}
+.map-view-origin-badge__coords {
+  margin-top: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(180, 170, 160, 0.75);
+  font-feature-settings: "tnum" 1;
+}
+.map-view-origin-badge--muted {
   color: var(--r-mute);
   font-size: 11px;
-}
-.map-view-origin-badge__county-tag {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(196, 160, 74, 0.95);
-}
-.map-view-origin-badge__county-name {
-  font-weight: 600;
-  color: #e4dfd8;
+  line-height: 1.35;
+  font-weight: 500;
 }
 
 /* Carto label-only: lift labels so they read on light basemap + radar */
@@ -1053,8 +1075,13 @@ li.is-selected .view-alerts-item {
 .alert-side-panel {
   position: relative;
   z-index: 1;
-  width: min(460px, 100vw);
+  width: min(460px, 100%);
+  min-width: 0;
+  max-width: 100vw;
+  box-sizing: border-box;
+  height: 100%;
   max-height: 100vh;
+  max-height: 100dvh;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1062,6 +1089,7 @@ li.is-selected .view-alerts-item {
   border-left: 1px solid var(--r-edge);
   box-shadow: -20px 0 56px rgba(0, 0, 0, 0.55), inset 1px 0 0 rgba(196, 160, 74, 0.12);
   animation: alert-panel-slide 0.28s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+  overflow: hidden;
 }
 @keyframes alert-panel-slide {
   from {
@@ -1076,9 +1104,12 @@ li.is-selected .view-alerts-item {
   flex-shrink: 0;
   position: relative;
   padding: 16px 14px 14px 16px;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
   border-bottom: 1px solid var(--r-edge);
   background: linear-gradient(135deg, rgba(60, 18, 25, 0.35) 0%, #0c090a 50%, #080506 100%);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
+  min-width: 0;
 }
 .alert-side-hero__glow {
   position: absolute;
@@ -1093,9 +1124,10 @@ li.is-selected .view-alerts-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding-right: 6rem;
+  padding-right: 5.75rem;
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 .alert-side-hero-ico {
   width: 44px;
@@ -1122,6 +1154,10 @@ li.is-selected .view-alerts-item {
   color: #f0ebe7;
   letter-spacing: 0.02em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 .alert-side-sub {
   margin: 8px 0 0;
@@ -1130,6 +1166,10 @@ li.is-selected .view-alerts-item {
   color: var(--r-silver);
   font-weight: 500;
   letter-spacing: 0.01em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 .alert-side-close {
   position: absolute;
@@ -1168,9 +1208,13 @@ li.is-selected .view-alerts-item {
 .alert-side-body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 16px 0 20px 16px;
+  min-width: 0;
+  padding: 16px 0 max(20px, env(safe-area-inset-bottom, 0px)) 16px;
+  padding-right: max(6px, env(safe-area-inset-right, 0px));
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   font-size: 12.5px;
   line-height: 1.55;
   color: #c4bfba;
@@ -1180,8 +1224,8 @@ li.is-selected .view-alerts-item {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding-right: 6px;
-  margin-right: 2px;
+  margin-right: 0;
+  box-sizing: border-box;
 }
 .alert-side-body::-webkit-scrollbar {
   width: 7px;
@@ -1202,6 +1246,10 @@ li.is-selected .view-alerts-item {
   background: linear-gradient(180deg, #7a2c38, #3d1218);
   border-color: rgba(196, 160, 74, 0.35);
 }
+.alert-side-body > * {
+  min-width: 0;
+  max-width: 100%;
+}
 .alert-side-empty {
   margin: 0;
   padding: 0 4px 0 0;
@@ -1218,6 +1266,10 @@ li.is-selected .view-alerts-item {
   padding: 10px 12px 6px 12px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   overflow: hidden;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .alert-meta-card__glow {
   position: absolute;
@@ -1293,13 +1345,18 @@ li.is-selected .view-alerts-item {
   color: var(--r-mute);
   font-weight: 600;
   line-height: 1.2;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .alert-meta-list__value {
   font-size: 12.5px;
   color: #ded9d3;
   font-weight: 500;
   line-height: 1.4;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   word-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Prose sections (description, area) */
@@ -1309,17 +1366,26 @@ li.is-selected .view-alerts-item {
   padding: 0 0 0 10px;
   border-left: 2px solid rgba(196, 160, 74, 0.2);
   box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .alert-prose-block__title {
   margin: 0 0 8px 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: #c4a04a;
   font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
 }
 .alert-prose-block__ico {
   font-size: 0.9rem;
@@ -1329,8 +1395,9 @@ li.is-selected .view-alerts-item {
 }
 .alert-prose-block__text {
   max-width: 100%;
+  min-width: 0;
   margin: 0;
-  padding: 0 4px 2px 0;
+  padding: 0 2px 2px 0;
   box-sizing: border-box;
 }
 .alert-prose-para {
@@ -1339,7 +1406,11 @@ li.is-selected .view-alerts-item {
   white-space: pre-line;
   color: #bbb6b0;
   box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   word-wrap: break-word;
+  word-break: break-word;
 }
 .alert-prose-para:last-child {
   margin-bottom: 0;
@@ -1355,6 +1426,10 @@ li.is-selected .view-alerts-item {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   margin-top: 2px;
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 .alert-callout__glow {
   position: absolute;
@@ -1369,11 +1444,14 @@ li.is-selected .view-alerts-item {
   align-items: center;
   gap: 6px;
   margin-bottom: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .alert-callout__icon {
   color: #e4c86b;
   font-size: 0.8rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 .alert-callout__label {
   font-size: 10px;
@@ -1381,6 +1459,10 @@ li.is-selected .view-alerts-item {
   letter-spacing: 0.15em;
   color: #e0c8a0;
   font-weight: 700;
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
 }
 .alert-callout__text {
   position: relative;
@@ -1390,6 +1472,11 @@ li.is-selected .view-alerts-item {
   line-height: 1.55;
   color: #ece8e4;
   font-weight: 500;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Forecast: bottom-right */
@@ -1649,6 +1736,34 @@ li.is-selected .view-alerts-item {
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Alert side panel: no horizontal bleed; comfortable touch scroll */
+  .alert-side-panel {
+    width: 100%;
+    max-width: 100%;
+  }
+  .alert-side-hero {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .alert-side-hero__row {
+    padding-right: 4.9rem;
+    gap: 8px;
+  }
+  .alert-side-title {
+    font-size: 1.02rem;
+  }
+  .alert-side-body {
+    padding-left: 12px;
+  }
+  .alert-meta-card {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .alert-prose-block {
+    margin-left: 0;
+    padding-left: 8px;
   }
 
   .map-view-origin-badge {

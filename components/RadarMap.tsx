@@ -16,6 +16,7 @@ const MESONET_MAX_NATIVE_ZOOM = 8;
 
 export type RadarMapHandle = {
   flyTo: (lat: number, lon: number, zoom?: number) => void;
+  fitToBounds: (bounds: { south: number; west: number; north: number; east: number }) => void;
 };
 
 type Props = {
@@ -103,6 +104,22 @@ const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
         const m = mapRef.current;
         if (!m) return;
         m.setView([lat, lon], zoom, { animate: true });
+        window.setTimeout(fireView, 0);
+      },
+      fitToBounds(bounds) {
+        const m = mapRef.current;
+        if (!m) return;
+        m.fitBounds(
+          [
+            [bounds.south, bounds.west],
+            [bounds.north, bounds.east]
+          ],
+          {
+            animate: true,
+            paddingTopLeft: [22, 84],
+            paddingBottomRight: [22, 132]
+          }
+        );
         window.setTimeout(fireView, 0);
       }
     }),

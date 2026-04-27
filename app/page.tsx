@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Feature, Geometry } from "geojson";
 import AlertDetailsSidePanel from "@/components/AlertDetailsSidePanel";
 import ForecastWidget from "@/components/ForecastWidget";
@@ -14,13 +14,15 @@ import {
   fetchActiveAlerts,
   fetchFrames,
   fetchMapAreaTimeZone,
+  searchPlace,
   type Product,
   type ActiveAlertsResponse,
   type RadarFrame
 } from "@/lib/api";
 import { getNwsFeatureId } from "@/lib/alertDisplay";
-import type { MapBounds } from "@/lib/alertsInView";
+import { filterFeaturesForPoint, type MapBounds } from "@/lib/alertsInView";
 import { readHomeFromStorage, writeHomeToStorage } from "@/lib/homeLocationStorage";
+import { readSettings, writeSettings } from "@/lib/userSettingsStorage";
 
 const PRODUCT_COPY: Record<
   Product,
@@ -54,32 +56,154 @@ export default function HomePage() {
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const [mapCenter, setMapCenter] = useState({ lat: 38, lon: -97 });
   const [homeLocation, setHomeLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [alertEmail, setAlertEmail] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<Feature<Geometry, Record<string, unknown> | null> | null>(
     null
   );
   const mapRef = useRef<RadarMapHandle | null>(null);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  const seenHomeAlertsRef = useRef<Set<string>>(new Set());
+
+  const persistUserSettings = useCallback(
+    (next: {
+      homeLocation: { lat: number; lon: number } | null;
+      emailEnabled: boolean;
+      alertEmail: string;
+    }) => {
+      writeSettings(deviceId, {
+        homeLat: next.homeLocation?.lat ?? null,
+        homeLon: next.homeLocation?.lon ?? null,
+        emailEnabled: next.emailEnabled,
+        alertEmail: next.alertEmail.trim(),
+        updatedAt: Date.now()
+      });
+    },
+    [deviceId]
+  );
+
+  const saveHomeLocation = useCallback(
+    (p: { lat: number; lon: number }) => {
+      setHomeLocation(p);
+      writeHomeToStorage(p.lat, p.lon);
+      persistUserSettings({ homeLocation: p, emailEnabled, alertEmail });
+    },
+    [alertEmail, emailEnabled, persistUserSettings]
+  );
 
   useEffect(() => {
-    const s = readHomeFromStorage();
-    if (s) setHomeLocation({ lat: s.lat, lon: s.lon });
-  }, []);
-
-  const onUserDeviceLocation = useCallback((p: { lat: number; lon: number }) => {
-    setHomeLocation(p);
-    writeHomeToStorage(p.lat, p.lon);
-  }, []);
-
-  useEffect(() => {
-    void fetchActiveAlerts()
+    void fetch("/api/device/id", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ ok?: boolean; deviceId?: string }>)
       .then((d) => {
-        setAlerts(d);
-        setAlertsFetchError(null);
+        if (!d.ok || !d.deviceId) return;
+        setDeviceId(d.deviceId);
       })
-      .catch((e: unknown) => {
-        setAlerts({ type: "FeatureCollection", features: [] });
-        setAlertsFetchError(e instanceof Error ? e.message : "Could not load alerts.");
+      .catch(() => {
+        setDeviceId("local-device");
       });
   }, []);
+
+  useEffect(() => {
+    if (deviceId === null) return;
+    const settings = readSettings(deviceId);
+    if (settings?.homeLat != null && settings.homeLon != null) {
+      setHomeLocation({ lat: settings.homeLat, lon: settings.homeLon });
+    } else {
+      const legacy = readHomeFromStorage();
+      if (legacy) setHomeLocation({ lat: legacy.lat, lon: legacy.lon });
+    }
+    if (settings) {
+      setEmailEnabled(settings.emailEnabled);
+      setAlertEmail(settings.alertEmail);
+    }
+  }, [deviceId]);
+
+  const onUserDeviceLocation = useCallback((p: { lat: number; lon: number }) => {
+    saveHomeLocation(p);
+  }, [saveHomeLocation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshAlerts = async () => {
+      try {
+        const d = await fetchActiveAlerts();
+        if (cancelled) return;
+        setAlerts(d);
+        setAlertsFetchError(null);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setAlerts({ type: "FeatureCollection", features: [] });
+        setAlertsFetchError(e instanceof Error ? e.message : "Could not load alerts.");
+      }
+    };
+    void refreshAlerts();
+    const timer = window.setInterval(() => {
+      void refreshAlerts();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onDocDown = (evt: MouseEvent) => {
+      if (!settingsOpen) return;
+      const target = evt.target as Node | null;
+      if (target && settingsRef.current && !settingsRef.current.contains(target)) {
+        setSettingsOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onDocDown);
+    return () => window.removeEventListener("mousedown", onDocDown);
+  }, [settingsOpen]);
+
+  const homeAlertIds = useMemo(() => {
+    if (!alerts || alerts.type !== "FeatureCollection" || !homeLocation) return [];
+    const atHome = filterFeaturesForPoint(alerts, homeLocation.lat, homeLocation.lon);
+    return atHome.map((f) => getNwsFeatureId(f));
+  }, [alerts, homeLocation]);
+
+  useEffect(() => {
+    if (!emailEnabled || !alertEmail || !homeLocation || homeAlertIds.length === 0) return;
+    const newIds = homeAlertIds.filter((id) => !seenHomeAlertsRef.current.has(id));
+    if (newIds.length === 0) return;
+    for (const id of homeAlertIds) seenHomeAlertsRef.current.add(id);
+    const subject = `WeatherRadar: ${newIds.length} new home alert${newIds.length > 1 ? "s" : ""}`;
+    const text = `New home-location weather alert(s):\n${newIds.join("\n")}\n\nMap center: ${homeLocation.lat.toFixed(3)}, ${homeLocation.lon.toFixed(3)}\nTime: ${new Date().toLocaleString()}`;
+    void fetch("/api/alerts/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: alertEmail.trim(), subject, text })
+    }).catch(() => {
+      // ignore background delivery errors in UI loop
+    });
+  }, [alertEmail, emailEnabled, homeAlertIds, homeLocation]);
+
+  const onSearchSubmit = useCallback(
+    async (evt: FormEvent<HTMLFormElement>) => {
+      evt.preventDefault();
+      const q = searchQuery.trim();
+      if (!q) return;
+      setSearchStatus("Searching…");
+      try {
+        const hit = await searchPlace(q);
+        if (!hit.ok) {
+          setSearchStatus("No location found.");
+          return;
+        }
+        mapRef.current?.fitToBounds(hit.bounds);
+        setSearchStatus(hit.displayName);
+      } catch {
+        setSearchStatus("Search failed.");
+      }
+    },
+    [searchQuery]
+  );
 
   useEffect(() => {
     let cancel = false;
@@ -173,6 +297,17 @@ export default function HomePage() {
     <main className="app-shell">
       <section className="map-host">
         <div className="map-top-hud" aria-label="Map info and location">
+          <form className="map-search-bar" onSubmit={onSearchSubmit} aria-label="Search location and zoom map">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search city, state, county, or lat,long"
+              aria-label="Search city, state, county, or latitude longitude"
+            />
+            <button type="submit">Go</button>
+            {searchStatus ? <span className="map-search-bar__status">{searchStatus}</span> : null}
+          </form>
           <ProactiveAlertBanners
             alerts={alerts}
             homeLat={homeLocation?.lat ?? null}
@@ -222,6 +357,60 @@ export default function HomePage() {
           home={homeLocation}
         />
         <AlertDetailsSidePanel feature={selectedFeature} onClose={() => setSelectedFeature(null)} />
+        <div className="settings-widget" ref={settingsRef}>
+          <button
+            type="button"
+            className="settings-widget__fab"
+            onClick={() => setSettingsOpen((v) => !v)}
+            aria-expanded={settingsOpen}
+            aria-controls="settings-widget-panel"
+            title="Settings"
+          >
+            SET
+          </button>
+          {settingsOpen && (
+            <div className="settings-widget__panel" id="settings-widget-panel">
+              <h3>Settings</h3>
+              <button
+                type="button"
+                className="settings-widget__action"
+                onClick={() => {
+                  saveHomeLocation(mapCenter);
+                }}
+              >
+                Save current map center as home
+              </button>
+              <label className="settings-widget__check">
+                <input
+                  type="checkbox"
+                  checked={emailEnabled}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setEmailEnabled(next);
+                    persistUserSettings({ homeLocation, emailEnabled: next, alertEmail });
+                  }}
+                />
+                Email new home alerts
+              </label>
+              <label className="settings-widget__field">
+                Alert email
+                <input
+                  type="email"
+                  value={alertEmail}
+                  placeholder="you@example.com"
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setAlertEmail(next);
+                    persistUserSettings({ homeLocation, emailEnabled, alertEmail: next });
+                  }}
+                />
+              </label>
+              <p className="settings-widget__hint">
+                Settings are saved per device IP and home alerts always stay prioritized.
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="rowton-floating-stack" aria-label="Map area and map controls">
           <div className="rowton-chrome" role="toolbar" aria-label="Map controls">

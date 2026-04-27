@@ -2,6 +2,7 @@ const PROXY = "/__api";
 
 /** NWS place lookup via Next — avoids 404 on hosts without FastAPI /geo route. */
 const VIEWPORT_PLACE_PATH = "/api/geo/viewport-place";
+const SEARCH_PLACE_PATH = "/api/geo/search-place";
 
 /**
  * When Next’s `/__api` rewrite cannot reach FastAPI, the browser often sees HTTP 500 with body
@@ -334,6 +335,29 @@ export async function fetchViewportPlace(lat: number, lon: number): Promise<View
     throw new Error(messageForApiFetchFailure(r.status, t));
   }
   return (await r.json()) as ViewportPlaceResult;
+}
+
+export type PlaceSearchResult = {
+  ok: true;
+  query: string;
+  displayName: string;
+  lat: number;
+  lon: number;
+  bounds: { south: number; west: number; north: number; east: number };
+} | {
+  ok: false;
+  query: string;
+  error: string;
+};
+
+export async function searchPlace(query: string): Promise<PlaceSearchResult> {
+  const q = new URLSearchParams({ q: query.trim() });
+  const r = await fetch(`${SEARCH_PLACE_PATH}?${q.toString()}`, { cache: "no-store" });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(messageForApiFetchFailure(r.status, t));
+  }
+  return (await r.json()) as PlaceSearchResult;
 }
 
 export async function fetchMapAreaTimeZone(

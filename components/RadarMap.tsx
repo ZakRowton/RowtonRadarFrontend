@@ -187,7 +187,8 @@ const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
 
       setMapReady(true);
 
-      if (navigator.geolocation) {
+      // Geolocation requires a secure context (HTTPS/localhost); skip on plain HTTP to avoid noisy console errors.
+      if (navigator.geolocation && (window.isSecureContext || window.location.hostname === "localhost")) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             if (!map) return;

@@ -38,7 +38,20 @@ export function messageForApiFetchFailure(status: number, bodyText: string): str
 export function getApiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_BASE;
   if (fromEnv && fromEnv.trim() !== "") {
-    return fromEnv.replace(/\/$/, "");
+    const normalized = fromEnv.replace(/\/$/, "");
+    // If UI is opened from a non-local host, a localhost API base is unreachable from that client.
+    // Fall back to same-origin proxy path instead of forcing browser LNA / mixed-host fetches.
+    if (typeof window !== "undefined") {
+      const uiHost = window.location.hostname.toLowerCase();
+      const localUi =
+        uiHost === "localhost" || uiHost === "127.0.0.1" || uiHost === "[::1]";
+      const localApi =
+        /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(normalized);
+      if (!localUi && localApi) {
+        return "";
+      }
+    }
+    return normalized;
   }
   if (typeof window === "undefined") {
     // SSR: point at the backend (server-side; no rewrites in RSC)

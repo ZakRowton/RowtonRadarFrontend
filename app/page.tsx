@@ -23,6 +23,7 @@ import { getNwsFeatureId } from "@/lib/alertDisplay";
 import { filterFeaturesForPoint, type MapBounds } from "@/lib/alertsInView";
 import { readHomeFromStorage, writeHomeToStorage } from "@/lib/homeLocationStorage";
 import { readSettings, writeSettings } from "@/lib/userSettingsStorage";
+import type { FeatureCollection } from "geojson";
 
 const PRODUCT_COPY: Record<
   Product,
@@ -164,7 +165,11 @@ export default function HomePage() {
 
   const homeAlertIds = useMemo(() => {
     if (!alerts || alerts.type !== "FeatureCollection" || !homeLocation) return [];
-    const atHome = filterFeaturesForPoint(alerts, homeLocation.lat, homeLocation.lon);
+    const atHome = filterFeaturesForPoint(
+      alerts as FeatureCollection,
+      homeLocation.lat,
+      homeLocation.lon
+    );
     return atHome.map((f) => getNwsFeatureId(f));
   }, [alerts, homeLocation]);
 

@@ -70,7 +70,7 @@ body {
 }
 
 /* Viewport center crosshair: lives in .map-host (sibling to map) so it stacks *above* the
-   Leaflet map and z-index:0 map wrap, but *below* alerts (1000) + badge (1004) + forecast. */
+   Leaflet map and z-index:0 map wrap, but *below* alerts (~1015) + HUD panels + forecast. */
 .map-viewport-crosshair {
   pointer-events: none;
   position: absolute;
@@ -290,7 +290,7 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
-  max-width: min(240px, calc(100vw - 24px));
+  max-width: min(198px, calc(100vw - 28px));
   pointer-events: none;
   font-family: var(--font-sora, "Sora", system-ui, sans-serif);
 }
@@ -1207,12 +1207,12 @@ body {
   border-color: var(--r-edge-bright);
 }
 
-/* In-view alerts: top-left */
+/* In-view alerts: top-left — above .map-top-hud (1005) so not hidden behind home/center panels */
 .view-alerts-anchor {
   position: fixed;
   top: max(84px, env(safe-area-inset-top, 0));
   left: 10px;
-  z-index: 1000;
+  z-index: 1015;
   pointer-events: none;
   max-width: min(100vw - 20px, 360px);
 }
@@ -2469,13 +2469,35 @@ li.is-selected .view-alerts-item {
 }
 
 @media (max-width: 720px) {
-  /* Alerts top-right so viewport badge + map stay visible top-left */
+  .map-top-hud {
+    max-width: min(100vw - 14px, 300px);
+  }
+
+  .map-geo-stack {
+    max-width: min(148px, calc(100vw - 88px));
+    gap: 5px;
+  }
+
+  .map-home-loc {
+    padding: 6px 8px 5px;
+  }
+
+  .map-view-origin-badge__line {
+    font-size: 11px;
+  }
+
+  .map-view-origin-badge__line--place2 {
+    font-size: 10px;
+  }
+
+  /* Alerts top-right — keep above HUD z-index */
   .view-alerts-anchor {
     left: auto;
     right: max(8px, env(safe-area-inset-right, 0px));
     top: max(10px, env(safe-area-inset-top, 0px));
     width: min(260px, calc(100vw - 120px));
     max-width: none;
+    z-index: 1015;
   }
   .view-alerts-floating {
     min-width: 0;
@@ -2521,7 +2543,8 @@ li.is-selected .view-alerts-item {
   }
 
   .map-view-origin-badge {
-    max-width: min(200px, calc(100vw - 140px));
+    max-width: min(148px, calc(100vw - 96px));
+    padding: 6px 8px 7px;
     font-size: 11px;
   }
 

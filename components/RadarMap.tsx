@@ -42,6 +42,14 @@ function alertColor(eventName: string): string {
 
 const TILE_SETTLE_FALLBACK_MS = 10_000;
 
+function alertMarkerSizeForZoom(zoom: number): number {
+  if (zoom <= 4) return 16;
+  if (zoom <= 6) return 20;
+  if (zoom <= 8) return 24;
+  if (zoom <= 10) return 28;
+  return 32;
+}
+
 function attachTileLayerSettled(layer: TileLayer, onSettled: () => void, cancelled: () => boolean) {
   let done = false;
   const fire = () => {
@@ -79,6 +87,7 @@ const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
 
   const [mapReady, setMapReady] = useState(false);
   const [radarAttached, setRadarAttached] = useState(false);
+  const [mapZoom, setMapZoom] = useState(6);
 
   const n = radarFrames.length;
   const currentTileUrl = useMemo(
@@ -181,7 +190,11 @@ const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
       if (alertMp) (alertMp as HTMLElement).style.zIndex = "600";
 
       map.on("moveend", fireView);
-      map.on("zoomend", fireView);
+      map.on("zoomend", () => {
+        setMapZoom(map?.getZoom() ?? 6);
+        fireView();
+      });
+      setMapZoom(map.getZoom());
       setTimeout(fireView, 0);
       map.whenReady(fireView);
 
@@ -352,11 +365,13 @@ const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
         const c = centroid(f);
         const [clon, clat] = c.geometry.coordinates;
         const em = eventAlertEmoji(ev);
+        const sz = alertMarkerSizeForZoom(mapZoom);
+        const anchorY = Math.round(sz * 1.25);
         const icon = L.divIcon({
           className: "alert-pin-wrap",
-          html: `<div class="alert-map-pin ${eventIconClass(ev)}" title=""><span class="alert-map-pin-emoji" aria-hidden="true">${em}</span></div>`,
-          iconSize: [32, 40],
-          iconAnchor: [16, 40]
+          html: `<div class="alert-map-pin ${eventIconClass(ev)}" style="width:${sz}px;height:${sz}px;font-size:${Math.max(11, Math.round(sz * 0.48))}px" title=""><span class="alert-map-pin-emoji" aria-hidden="true">${em}</span></div>`,
+          iconSize: [sz, anchorY],
+          iconAnchor: [Math.round(sz / 2), anchorY]
         });
         const mk = L.marker([clat, clon], { icon, pane: "alertMarkers" });
         mk.on("click", (e) => {
@@ -371,7 +386,7 @@ const RadarMap = forwardRef<RadarMapHandle, Props>(function RadarMap(
         g?.addLayer(mk);
       }
     });
-  }, [mapReady, activeAlerts]);
+  }, [mapReady, activeAlerts, mapZoom]);
 
   useEffect(() => {
     const radarLayer = radarLayerRef.current;

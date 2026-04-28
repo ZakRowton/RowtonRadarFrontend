@@ -8,6 +8,8 @@ type Props = {
   frameIndex: number;
   onScrub: (index: number) => void;
   onScrubStart?: () => void;
+  onTogglePlay?: () => void;
+  playing?: boolean;
   /** IANA time zone for map view; falls back to local. */
   areaTimeZone: string | null;
   /** When frames are empty, show this instead of “Loading frames…” (e.g. API unreachable). */
@@ -67,6 +69,8 @@ export default function RadarTimelineBar({
   frameIndex,
   onScrub,
   onScrubStart,
+  onTogglePlay,
+  playing = true,
   areaTimeZone,
   fetchErrorText = null
 }: Props) {
@@ -139,6 +143,15 @@ export default function RadarTimelineBar({
             {formatFrameTime(current.timeUnix, areaTimeZone)}
           </time>
         )}
+        <button
+          type="button"
+          className={`rowton-timeline__play ${playing ? "is-playing" : "is-paused"}`}
+          onClick={onTogglePlay}
+          aria-pressed={playing}
+          title={playing ? "Pause radar animation" : "Resume radar animation"}
+        >
+          {playing ? "Pause" : "Play"}
+        </button>
       </div>
       <div
         className="rowton-timeline__track"

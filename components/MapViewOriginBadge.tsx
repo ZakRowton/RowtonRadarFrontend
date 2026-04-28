@@ -6,6 +6,7 @@ import { fetchViewportPlace, type ViewportPlaceResult } from "@/lib/api";
 type Props = {
   centerLat: number;
   centerLon: number;
+  onSetHome?: () => void;
 };
 
 function formatCountyLabel(raw: string | null | undefined): string {
@@ -17,7 +18,7 @@ function formatCountyLabel(raw: string | null | undefined): string {
 
 const coordsPrecise = (lat: number, lon: number) => `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
 
-export default function MapViewOriginBadge({ centerLat, centerLon }: Props) {
+export default function MapViewOriginBadge({ centerLat, centerLon, onSetHome }: Props) {
   const [data, setData] = useState<ViewportPlaceResult | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +52,14 @@ export default function MapViewOriginBadge({ centerLat, centerLon }: Props) {
   if (data == null) {
     return (
       <div className="map-view-origin-badge" aria-live="polite">
-        <div className="map-view-origin-badge__label">Map center</div>
+        <div className="map-view-origin-badge__head">
+          <div className="map-view-origin-badge__label">Map center</div>
+          {onSetHome ? (
+            <button type="button" className="map-view-origin-badge__home" onClick={onSetHome} title="Save center as home">
+              ⌂
+            </button>
+          ) : null}
+        </div>
         <div className="map-view-origin-badge__line">
           {loading ? "Resolving place…" : "—"}
         </div>
@@ -64,7 +72,14 @@ export default function MapViewOriginBadge({ centerLat, centerLon }: Props) {
 
   return (
     <div className="map-view-origin-badge" aria-live="polite">
-      <div className="map-view-origin-badge__label">Map center</div>
+      <div className="map-view-origin-badge__head">
+        <div className="map-view-origin-badge__label">Map center</div>
+        {onSetHome ? (
+          <button type="button" className="map-view-origin-badge__home" onClick={onSetHome} title="Save center as home">
+            ⌂
+          </button>
+        ) : null}
+      </div>
       {data.ok ? (
         <>
           <div className="map-view-origin-badge__line">

@@ -15,6 +15,8 @@ import {
   fetchFrames,
   fetchMapAreaTimeZone,
   searchPlace,
+  searchPlaceSuggestions,
+  type PlaceSuggestion,
   type Product,
   type ActiveAlertsResponse,
   type RadarFrame
@@ -63,6 +65,9 @@ export default function HomePage() {
   const [alertEmail, setAlertEmail] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
+  const [searchSuggestions, setSearchSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [searchSuggestOpen, setSearchSuggestOpen] = useState(false);
+  const [controlsMinimized, setControlsMinimized] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<Feature<Geometry, Record<string, unknown> | null> | null>(
     null
   );
@@ -211,6 +216,27 @@ export default function HomePage() {
   );
 
   useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 3) {
+      setSearchSuggestions([]);
+      setSearchSuggestOpen(false);
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void searchPlaceSuggestions(q).then((items) => {
+        if (cancelled) return;
+        setSearchSuggestions(items);
+        setSearchSuggestOpen(items.length > 0);
+      });
+    }, 220);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [searchQuery]);
+
+  useEffect(() => {
     let cancel = false;
     setRadarFetchError(null);
     void fetchFrames(product)
@@ -307,10 +333,34 @@ export default function HomePage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => {
+                if (searchSuggestions.length > 0) setSearchSuggestOpen(true);
+              }}
               placeholder="Search city, state, county, or lat,long"
               aria-label="Search city, state, county, or latitude longitude"
             />
             <button type="submit">Go</button>
+            {searchSuggestOpen && searchSuggestions.length > 0 ? (
+              <ul className="map-search-suggest" role="listbox" aria-label="Search suggestions">
+                {searchSuggestions.map((s, i) => (
+                  <li key={`${s.label}-${i}`}>
+                    <button
+                      type="button"
+                      className="map-search-suggest__item"
+                      onClick={() => {
+                        setSearchQuery(s.label);
+                        setSearchSuggestOpen(false);
+                        mapRef.current?.flyTo(s.lat, s.lon, s.kind === "state" ? 6 : s.kind === "county" ? 8 : 10);
+                        setSearchStatus(s.label);
+                      }}
+                    >
+                      <span>{s.label}</span>
+                      <small>{s.kind}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {searchStatus ? <span className="map-search-bar__status">{searchStatus}</span> : null}
           </form>
           <ProactiveAlertBanners
@@ -328,7 +378,11 @@ export default function HomePage() {
                 mapRef.current?.flyTo(homeLocation.lat, homeLocation.lon, 10);
               }}
             />
-            <MapViewOriginBadge centerLat={mapCenter.lat} centerLon={mapCenter.lon} />
+            <MapViewOriginBadge
+              centerLat={mapCenter.lat}
+              centerLon={mapCenter.lon}
+              onSetHome={() => saveHomeLocation(mapCenter)}
+            />
           </div>
         </div>
         <RadarMap
@@ -371,7 +425,7 @@ export default function HomePage() {
             aria-controls="settings-widget-panel"
             title="Settings"
           >
-            SET
+            ⚙
           </button>
           {settingsOpen && (
             <div className="settings-widget__panel" id="settings-widget-panel">
@@ -417,88 +471,51 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="rowton-floating-stack" aria-label="Map area and map controls">
-          <div className="rowton-chrome" role="toolbar" aria-label="Map controls">
-            <div className="rowton-chrome__glow" aria-hidden />
-            <div className="rowton-chrome__inner">
-              <div
-                className="rr-logo"
-                title="RowtonRadar — live NEXRAD over your map"
-              >
-                <div className="rr-logo__mark" aria-hidden>
-                  <span className="rr-logo__line" />
-                </div>
-                <div className="rr-logo__type">
-                  <div className="rr-logo__rowton">
-                    <span className="rr-logo__row">Row</span>
-                    <span className="rr-logo__ton">ton</span>
-                  </div>
-                  <span className="rr-logo__radar">Radar</span>
-                </div>
-              </div>
-
-              <div className="rowton-panels">
-                <div className="rowton-section" role="group" aria-label="What the colors mean">
-                  <div className="rowton-metric">
-                    <div className="rowton-metric__label">View mode</div>
-                    <div className="rowton-mode-toggle">
-                      <button
-                        type="button"
-                        className={`rowton-pill ${product === "reflectivity" ? "is-on" : ""}`}
-                        onClick={() => setProduct("reflectivity")}
-                        title={PRODUCT_COPY.reflectivity.hint}
-                        aria-pressed={product === "reflectivity"}
-                      >
-                        <span className="rowton-pill__tag">
-                          {PRODUCT_COPY.reflectivity.abbr}
-                        </span>
-                        <span className="rowton-pill__main">{PRODUCT_COPY.reflectivity.title}</span>
-                        <span className="rowton-pill__sub">{PRODUCT_COPY.reflectivity.desc}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`rowton-pill ${product === "velocity" ? "is-on" : ""}`}
-                        onClick={() => setProduct("velocity")}
-                        title={PRODUCT_COPY.velocity.hint}
-                        aria-pressed={product === "velocity"}
-                      >
-                        <span className="rowton-pill__tag">{PRODUCT_COPY.velocity.abbr}</span>
-                        <span className="rowton-pill__main">{PRODUCT_COPY.velocity.title}</span>
-                        <span className="rowton-pill__sub">{PRODUCT_COPY.velocity.desc}</span>
-                      </button>
+        <div className={`rowton-dock ${controlsMinimized ? "is-minimized" : ""}`}>
+          <div className="rowton-floating-stack" aria-label="Map area and map controls">
+            <RadarTimelineBar
+              frames={radarFrames}
+              frameIndex={frameIndex}
+              onScrub={(i) => setFrameIndex(i)}
+              onScrubStart={() => setPlaying(false)}
+              onTogglePlay={() => setPlaying((v) => !v)}
+              playing={playing}
+              areaTimeZone={mapAreaTz}
+              fetchErrorText={radarFetchError}
+            />
+            <div className="rowton-chrome" role="toolbar" aria-label="Map controls">
+              <div className="rowton-chrome__glow" aria-hidden />
+              <div className="rowton-chrome__inner">
+                <div className="rowton-panels">
+                  <div className="rowton-section" role="group" aria-label="Radar layer controls">
+                    <div className="rowton-metric">
+                      <div className="rowton-metric__label">View mode</div>
+                      <div className="rowton-mode-toggle">
+                        <button
+                          type="button"
+                          className={`rowton-pill ${product === "reflectivity" ? "is-on" : ""}`}
+                          onClick={() => setProduct("reflectivity")}
+                          title={PRODUCT_COPY.reflectivity.hint}
+                          aria-pressed={product === "reflectivity"}
+                        >
+                          <span className="rowton-pill__main">{PRODUCT_COPY.reflectivity.title}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`rowton-pill ${product === "velocity" ? "is-on" : ""}`}
+                          onClick={() => setProduct("velocity")}
+                          title={PRODUCT_COPY.velocity.hint}
+                          aria-pressed={product === "velocity"}
+                        >
+                          <span className="rowton-pill__main">{PRODUCT_COPY.velocity.title}</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="rowton-metric rowton-metric--loop">
-                    <div className="rowton-metric__row">
-                      <div className="rowton-metric__label">Animation</div>
-                      <button
-                        type="button"
-                        className={`rowton-btn-play ${playing ? "is-live" : "is-paused"}`}
-                        onClick={() => setPlaying((v) => !v)}
-                        aria-pressed={playing}
-                        title={playing ? "Pause the radar time loop" : "Resume the radar time loop"}
-                      >
-                        {playing ? (
-                          <>
-                            <span className="rowton-btn-play__pulse" aria-hidden />
-                            <span className="rowton-btn-play__text">
-                              <strong>Auto-playing</strong>
-                              <small>Tap to pause</small>
-                            </span>
-                          </>
-                        ) : (
-                          <span className="rowton-btn-play__text">
-                            <strong>Paused</strong>
-                            <small>Tap to play</small>
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                    <div className="rowton-metric__slider">
-                      <label className="rowton-sr" htmlFor="rowton-frame-dur">Animation speed</label>
-                      <div className="rowton-metric__speed">
-                        <span className="rowton-metric__label">Speed</span>
+                    <div className="rowton-metric">
+                      <div className="rowton-metric__label">Animation speed</div>
+                      <div className="rowton-metric__slider">
+                        <label className="rowton-sr" htmlFor="rowton-frame-dur">Animation speed</label>
                         <input
                           id="rowton-frame-dur"
                           className="rowton-range rowton-range--long"
@@ -512,52 +529,41 @@ export default function HomePage() {
                         />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="rowton-metric">
-                    <div className="rowton-metric__label">Radar on map</div>
-                    <div className="rowton-metric__slider">
-                      <label className="rowton-sr" htmlFor="rowton-opacity">
-                        Radar layer opacity
-                      </label>
-                      <input
-                        id="rowton-opacity"
-                        className="rowton-range rowton-range--long"
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={Math.round(radarOpacity * 100)}
-                        onChange={(e) => setRadarOpacity(Number(e.target.value) / 100)}
-                        aria-label="Radar layer opacity on the map"
-                      />
-                      <span className="rowton-value">{Math.round(radarOpacity * 100)}%</span>
+                    <div className="rowton-metric">
+                      <div className="rowton-metric__label">Radar opacity</div>
+                      <div className="rowton-metric__slider">
+                        <label className="rowton-sr" htmlFor="rowton-opacity">
+                          Radar layer opacity
+                        </label>
+                        <input
+                          id="rowton-opacity"
+                          className="rowton-range rowton-range--long"
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={Math.round(radarOpacity * 100)}
+                          onChange={(e) => setRadarOpacity(Number(e.target.value) / 100)}
+                          aria-label="Radar layer opacity on the map"
+                        />
+                        <span className="rowton-value">{Math.round(radarOpacity * 100)}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                <div
-                  className="rowton-legend"
-                  title="Greens, yellows, reds, and magentas: stronger (reflectivity) or Doppler in/out (velocity) depending on the mode you chose."
-                >
-                  <div className="rowton-legend__title">Map colors</div>
-                  <p className="rowton-legend__cue">
-                    {product === "reflectivity"
-                      ? "Brighter = more intense hydrometeors. Dark = light or none."
-                      : "Cool vs warm tones = movement toward or away from the site."}
-                  </p>
                 </div>
               </div>
             </div>
           </div>
-          <RadarTimelineBar
-            frames={radarFrames}
-            frameIndex={frameIndex}
-            onScrub={(i) => setFrameIndex(i)}
-            onScrubStart={() => setPlaying(false)}
-            areaTimeZone={mapAreaTz}
-            fetchErrorText={radarFetchError}
-          />
+          <button
+            type="button"
+            className="rowton-dock__tab"
+            onClick={() => setControlsMinimized((v) => !v)}
+            aria-label={controlsMinimized ? "Show action panel" : "Hide action panel"}
+            aria-expanded={!controlsMinimized}
+          >
+            {controlsMinimized ? "Controls" : "Hide"}
+          </button>
         </div>
       </section>
     </main>

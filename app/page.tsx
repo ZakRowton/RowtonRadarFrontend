@@ -327,6 +327,18 @@ export default function HomePage() {
   return (
     <main className="app-shell">
       <section className="map-host">
+        <div className="map-floating-logo" title="Rowton Radar — live NEXRAD over your map">
+          <div className="map-floating-logo__mark" aria-hidden>
+            <span className="map-floating-logo__line" />
+          </div>
+          <div className="map-floating-logo__type">
+            <div className="map-floating-logo__rowton">
+              <span className="map-floating-logo__row">Row</span>
+              <span className="map-floating-logo__ton">ton</span>
+            </div>
+            <span className="map-floating-logo__radar">Radar</span>
+          </div>
+        </div>
         <div className="map-top-hud" aria-label="Map info and location">
           <form className="map-search-bar" onSubmit={onSearchSubmit} aria-label="Search location and zoom map">
             <input
